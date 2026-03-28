@@ -5,15 +5,15 @@ This is your control panel — change settings here, nowhere else.
 
 # ─── Ollama Model ────────────────────────────────────────────────────────────
 # Swap this to test different models. Must be pulled in Ollama first.
-# Examples: "llama3.1:8b", "qwen2.5:7b", "mistral:7b", "deepseek-r1:8b"
-OLLAMA_MODEL = "granite4:latest"
+# Examples: "llama3.1:8b", "qwen3.5:2b", "granite4:latest", "lfm2.5-thinking:latest"
+OLLAMA_MODEL = "lfm2.5-thinking:latest"
 
 # Ollama server base URL (default local)
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 # ─── Agent Settings ──────────────────────────────────────────────────────────
 # Maximum number of tool calls the agent can make in a single job
-AGENT_MAX_ITERATIONS = 10
+AGENT_MAX_ITERATIONS = 15
 
 # Temperature for the model (0 = deterministic, good for tool use)
 AGENT_TEMPERATURE = 0

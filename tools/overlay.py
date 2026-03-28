@@ -2,10 +2,34 @@
 Overlay tools — text, watermark, subtitles, thumbnail extraction.
 """
 
+import os
+from typing import Optional
+
 from langchain.tools import tool
 
 from utils.ffmpeg_runner import run_ffmpeg
 from utils.file_utils import get_output_path, validate_input_file
+
+
+def _resolve_font_file(font_file: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """Resolve a usable font path; fallback to common system fonts on Windows/macOS/Linux."""
+    if font_file:
+        font_path = os.path.abspath(font_file)
+        if not os.path.exists(font_path):
+            return None, f"Font file not found: '{font_path}'"
+        return font_path, None
+
+    # Auto-pick a common system font if available
+    candidates = [
+        os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts", "arial.ttf"),  # Windows
+        "/Library/Fonts/Arial.ttf",  # macOS
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate, None
+
+    return None, None
 
 
 @tool
@@ -13,6 +37,7 @@ def add_text_overlay(
     input_path: str,
     text: str,
     job_id: str,
+    font_file: Optional[str] = None,
     position: str = "bottom-center",
     font_size: int = 48,
     font_color: str = "white",
@@ -27,8 +52,10 @@ def add_text_overlay(
         input_path: Absolute path to the input video file.
         text: The text string to display on the video.
         job_id: The current job ID for naming the output file.
+        font_file: Path to a .ttf/.otf font. If omitted, the function will try to locate a common
+               system font (Arial/DejaVuSans) before letting FFmpeg pick a default.
         position: Where to place the text. Options: 'top-left', 'top-center', 'top-right',
-                  'center', 'bottom-left', 'bottom-center', 'bottom-right'. Default: 'bottom-center'.
+              'center', 'bottom-left', 'bottom-center', 'bottom-right'. Default: 'bottom-center'.
         font_size: Font size in pixels. Default: 48.
         font_color: Text color name or hex (e.g., 'white', 'yellow', '#FF0000'). Default: 'white'.
         start_time: Time in seconds when text appears. Default: 0 (from start).
@@ -37,6 +64,10 @@ def add_text_overlay(
     valid, err = validate_input_file(input_path)
     if not valid:
         return f"Error: {err}"
+
+    font_path, font_err = _resolve_font_file(font_file)
+    if font_err:
+        return f"Error: {font_err}"
 
     position_map = {
         "top-left":      ("10", "10"),
@@ -52,7 +83,12 @@ def add_text_overlay(
     x_expr, y_expr = pos
 
     # Escape special chars for FFmpeg drawtext
-    safe_text = text.replace("'", "\\'").replace(":", "\\:")
+    safe_text = text.replace("\\", "\\\\").replace("'", "\\'").replace(":", "\\:")
+
+    font_clause = ""
+    if font_path:
+        safe_font = font_path.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+        font_clause = f"fontfile='{safe_font}':"
 
     time_filter = ""
     if start_time > 0 or end_time > 0:
@@ -60,7 +96,8 @@ def add_text_overlay(
         time_filter = t_start
 
     vf = (
-        f"drawtext=text='{safe_text}'"
+        f"drawtext={font_clause}"
+        f"text='{safe_text}'"
         f":fontsize={font_size}"
         f":fontcolor={font_color}"
         f":x={x_expr}:y={y_expr}"
