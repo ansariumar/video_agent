@@ -5,8 +5,8 @@ This is your control panel — change settings here, nowhere else.
 
 # ─── Ollama Model ────────────────────────────────────────────────────────────
 # Swap this to test different models. Must be pulled in Ollama first.
-# Examples: "llama3.1:8b", "qwen3.5:2b", "granite4:latest", "lfm2.5-thinking:latest"
-OLLAMA_MODEL = "lfm2.5-thinking:latest"
+# Examples: "minimax-m2.7:cloud", "qwen3.5:2b", "granite4:latest", "lfm2.5-thinking:latest"
+OLLAMA_MODEL = "minimax-m2.7:cloud"
 
 # Ollama server base URL (default local)
 OLLAMA_BASE_URL = "http://localhost:11434"
