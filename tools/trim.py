@@ -29,10 +29,14 @@ def trim_video(input_path: str, start_time: str, end_time: str, job_id: str) -> 
     output_path = get_output_path(job_id, suffix="_trimmed")
 
     result = run_ffmpeg([
+        "-hwaccel", "cuda",          # Optional: GPU decoding
         "-i", input_path,
-        "-ss", start_time,
+        "-ss", start_time,           # Accurate seek (after input)
         "-to", end_time,
-        "-c", "copy",       # Stream copy — fast, no re-encode
+        "-c:v", "h264_nvenc",        # GPU encoding
+        # "-preset", "p5",             # Balanced preset
+        # "-cq", "19",                 # Quality (lower = better)
+        "-c:a", "aac",               # Re-encode audio
         output_path
     ])
 
@@ -66,12 +70,15 @@ def merge_videos(input_paths: list[str], job_id: str) -> str:
 
     try:
         result = run_ffmpeg([
-            "-f", "concat",
-            "-safe", "0",
-            "-i", concat_list,
-            "-c", "copy",
-            output_path
-        ])
+    "-f", "concat",
+    "-safe", "0",
+    "-i", concat_list,
+    "-c:v", "h264_nvenc",
+    # "-preset", "p5",
+    # "-cq", "19",
+    "-c:a", "aac",
+    output_path
+])
     finally:
         os.unlink(concat_list)
 
@@ -84,39 +91,45 @@ def merge_videos(input_paths: list[str], job_id: str) -> str:
 def split_video(input_path: str, split_timestamps: list[str], job_id: str) -> str:
     """
     Split a video into multiple segments at the given timestamps.
-    Use this when the user wants to divide a video into parts.
-
-    Args:
-        input_path: Absolute path to the input video file.
-        split_timestamps: List of timestamps where splits should occur (e.g., ['00:01:00', '00:02:30']).
-        job_id: The current job ID for naming output files.
+    Uses frame-accurate splitting with GPU encoding.
     """
     valid, err = validate_input_file(input_path)
     if not valid:
         return f"Error: {err}"
 
-    from utils.file_utils import get_output_path
     import os
 
     output_dir = os.path.dirname(get_output_path(job_id))
     output_paths = []
     errors = []
 
-    # Build segment boundaries: [start, end] pairs
-    boundaries = ["0"] + split_timestamps + ["999999"]
+    # Normalize boundaries
+    boundaries = ["0"] + split_timestamps
 
-    for i in range(len(boundaries) - 1):
+    for i in range(len(boundaries)):
         start = boundaries[i]
-        end = boundaries[i + 1]
+        end = split_timestamps[i] if i < len(split_timestamps) else None
+
         out = os.path.join(output_dir, f"{job_id}_part{i+1}.mp4")
 
-        result = run_ffmpeg([
+        cmd = [
+            "-hwaccel", "cuda",
             "-i", input_path,
-            "-ss", start,
-            "-to", end,
-            "-c", "copy",
+            "-ss", start
+        ]
+
+        if end:
+            cmd += ["-to", end]
+
+        cmd += [
+            "-c:v", "h264_nvenc",
+            "-preset", "p5",
+            "-cq", "19",
+            "-c:a", "aac",
             out
-        ])
+        ]
+
+        result = run_ffmpeg(cmd)
 
         if result.success:
             output_paths.append(out)
